@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from srtctl.core.fingerprint import generate_capture_script
 from srtctl.core.health import wait_for_health
 from srtctl.core.processes import ManagedProcess, NamedProcesses
-from srtctl.core.schema import build_otel_env, installs_dynamo
+from srtctl.core.schema import build_otel_env, installs_dynamo, needs_remap_root
 from srtctl.core.slurm import CONTAINER_REMAP_ROOT_EXPORT, get_hostname_ip, start_srun_process
 from srtctl.ports import ETCD_CLIENT_PORT, KV_EVENTS_PORT_BASE, KVBM_ZMQ_PORT_BASE, NATS_PORT
 
@@ -247,7 +247,7 @@ class WorkerStageMixin:
             env_to_unset=env_to_unset,
             bash_preamble=bash_preamble,
             srun_options=self.runtime.srun_options,
-            srun_export_env=CONTAINER_REMAP_ROOT_EXPORT if installs_dynamo(self.config) else None,
+            srun_export_env=CONTAINER_REMAP_ROOT_EXPORT if needs_remap_root(self.config) else None,
             het_group=process.het_group,
         )
 
@@ -380,7 +380,7 @@ class WorkerStageMixin:
             container_mounts=self.runtime.container_mounts,
             env_to_set=env_to_set,
             bash_preamble=bash_preamble,
-            srun_export_env=CONTAINER_REMAP_ROOT_EXPORT if installs_dynamo(self.config) else None,
+            srun_export_env=CONTAINER_REMAP_ROOT_EXPORT if needs_remap_root(self.config) else None,
             mpi=srun_config.mpi,
             oversubscribe=srun_config.oversubscribe,
             cpu_bind=srun_config.cpu_bind,
