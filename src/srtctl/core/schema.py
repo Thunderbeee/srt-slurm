@@ -1431,6 +1431,10 @@ class DynamoConfig:
         top_of_tree: Clone repo at HEAD (latest)
         wheel: ai-dynamo package version to install via staged wheels. The
                matching ai-dynamo-runtime wheel is installed automatically.
+        remap_root: Whether the dynamo install runs as root inside the container via
+                    ``ENROOT_REMAP_ROOT=yes`` (default: True). Set to False on clusters
+                    where remapping to root breaks the MPI/PMIx bootstrap of the
+                    co-located workers; the install then runs as the invoking user.
         request_plane: Request plane to use (default: "tcp"). Valid values: "nats", "tcp", "http"
         event_plane: Event plane override, sets DYN_EVENT_PLANE (default: None — follow
                      the Dynamo image's own default). Valid values: "nats", "zmq"
@@ -1442,6 +1446,7 @@ class DynamoConfig:
     _VALID_EVENT_PLANES: ClassVar[tuple[str, ...]] = ("nats", "zmq")
 
     install: bool = True
+    remap_root: bool = True
     version: str | None = "0.8.0"
     hash: str | None = None
     top_of_tree: bool = False
@@ -2162,3 +2167,16 @@ def installs_dynamo(config: SrtConfig) -> bool:
     dynamo frontend is selected and install isn't disabled.
     """
     return config.frontend.type == "dynamo" and config.dynamo.install
+
+
+def needs_remap_root(config: SrtConfig) -> bool:
+    """Whether to inject ``ENROOT_REMAP_ROOT=yes`` on dynamo-installing launches.
+
+    The cold dynamo build wants root inside the container for apt-get/pip-to-system,
+    so this defaults on. It is separable from :func:`installs_dynamo` because on some
+    clusters remapping to root breaks the PMIx bootstrap of the MPI workers sharing
+    that step -- every rank then dies with ``OPAL ERROR: Unreachable`` before the
+    engine starts. Those sites set ``dynamo.remap_root: false`` and the install runs
+    unprivileged instead.
+    """
+    return installs_dynamo(config) and config.dynamo.remap_root

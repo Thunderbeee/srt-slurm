@@ -225,7 +225,7 @@ def test_worker_stage_wraps_nonfatal_fingerprint_hook(tmp_path: Path) -> None:
     assert mock_srun.call_args.kwargs["env_to_unset"] is None
 
 
-def _remap_worker_mixin(tmp_path: Path, *, frontend_type: str, dynamo_install: bool):
+def _remap_worker_mixin(tmp_path: Path, *, frontend_type: str, dynamo_install: bool, remap_root: bool = True):
     """Build a WorkerStageMixin with a minimal config for remap-root injection tests."""
     backend = MagicMock()
     backend.build_worker_command.return_value = ["python3", "-m", "worker"]
@@ -238,6 +238,7 @@ def _remap_worker_mixin(tmp_path: Path, *, frontend_type: str, dynamo_install: b
         frontend=SimpleNamespace(type=frontend_type),
         dynamo=SimpleNamespace(
             install=dynamo_install,
+            remap_root=remap_root,
             get_install_commands=lambda: "echo install-dynamo",
             request_plane="nats",
             event_plane="zmq",
@@ -280,6 +281,25 @@ def test_worker_stage_injects_remap_root_for_dynamo_install(tmp_path: Path) -> N
         mixin.start_worker(process, [process])
 
     assert mock_srun.call_args.kwargs["srun_export_env"] == {"ENROOT_REMAP_ROOT": "yes"}
+
+
+def test_worker_stage_no_remap_root_when_disabled(tmp_path: Path) -> None:
+    """dynamo.remap_root=false suppresses the injection even though dynamo installs.
+
+    Some clusters cannot remap to root without breaking the PMIx bootstrap of the
+    MPI workers sharing the step; they opt out via config rather than a local patch.
+    """
+    mixin, process = _remap_worker_mixin(
+        tmp_path, frontend_type="dynamo", dynamo_install=True, remap_root=False
+    )
+    with (
+        patch("srtctl.cli.mixins.worker_stage.generate_capture_script", return_value="fingerprint || true"),
+        patch("srtctl.cli.mixins.worker_stage.start_srun_process") as mock_srun,
+    ):
+        mock_srun.return_value = MagicMock()
+        mixin.start_worker(process, [process])
+
+    assert mock_srun.call_args.kwargs["srun_export_env"] is None
 
 
 def test_worker_stage_no_remap_root_for_sglang_frontend(tmp_path: Path) -> None:
